@@ -185,7 +185,7 @@ const ProductsPage = () => {
             </thead>
             <tbody className="divide-y divide-gray-100">
               {products.map((product) => (
-                <div key={product.id}>
+                <>
                   <tr
                     key={product.id}
                     className="hover:bg-gray-50 transition-colors"
@@ -367,7 +367,7 @@ const ProductsPage = () => {
                       </td>
                     </tr>
                   )}
-                </div>
+                </>
               ))}
             </tbody>
           </table>
@@ -600,5 +600,4 @@ const ProductsPage = () => {
     </div>
   );
 };
-
 export default ProductsPage;
