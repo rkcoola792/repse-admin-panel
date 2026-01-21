@@ -7,53 +7,16 @@ import {
   X,
   Upload,
   Trash,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
-import { useState } from "react";
+import { use, useEffect, useState } from "react";
+import axios from "axios";
 
 const ProductsPage = () => {
   const [showModal, setShowModal] = useState(false);
-  const [products, setProducts] = useState([
-    {
-      id: 1,
-      name: "Nike Air Max 270",
-      category: "Sneakers",
-      price: "₹8,999",
-      stock: 45,
-      status: "In Stock",
-    },
-    {
-      id: 2,
-      name: "Adidas Ultraboost 21",
-      category: "Running",
-      price: "₹12,499",
-      stock: 23,
-      status: "Low Stock",
-    },
-    {
-      id: 3,
-      name: "Puma RS-X³",
-      category: "Lifestyle",
-      price: "₹6,999",
-      stock: 67,
-      status: "In Stock",
-    },
-    {
-      id: 4,
-      name: "Reebok Classic",
-      category: "Casual",
-      price: "₹5,499",
-      stock: 89,
-      status: "In Stock",
-    },
-    {
-      id: 5,
-      name: "New Balance 574",
-      category: "Casual",
-      price: "₹7,999",
-      stock: 0,
-      status: "Out of Stock",
-    },
-  ]);
+  const [expandedRows, setExpandedRows] = useState({});
+  const [products, setProducts] = useState([]);
 
   const [newProduct, setNewProduct] = useState({
     name: "",
@@ -63,15 +26,54 @@ const ProductsPage = () => {
     newArrival: false,
     topSelling: false,
     images: [],
+    variants: [
+      { size: "Small", stock: 0 },
+      { size: "Medium", stock: 0 },
+      { size: "Large", stock: 0 },
+    ],
   });
 
   const [imageUrl, setImageUrl] = useState("");
+  const [activeTab, setActiveTab] = useState({});
 
+  const toggleRow = (productId) => {
+    setExpandedRows((prev) => ({
+      ...prev,
+      [productId]: !prev[productId],
+    }));
+    // Set default tab to 'sizes' when expanding
+    if (!expandedRows[productId]) {
+      setActiveTab((prev) => ({
+        ...prev,
+        [productId]: "sizes",
+      }));
+    }
+  };
+  const getProducts = async () => {
+    try {
+      const response = await axios.get(
+        `${import.meta.env.VITE_APP_BASE_URL}/products?skip=0&limit=50`,
+        { withCredentials: true },
+      );
+      setProducts(response.data);
+    } catch (error) {
+      console.error("Error fetching products:", error);
+    }
+  };
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
     setNewProduct((prev) => ({
       ...prev,
       [name]: type === "checkbox" ? checked : value,
+    }));
+  };
+
+  const handleVariantStockChange = (index, value) => {
+    setNewProduct((prev) => ({
+      ...prev,
+      variants: prev.variants.map((variant, i) =>
+        i === index ? { ...variant, stock: parseInt(value) || 0 } : variant,
+      ),
     }));
   };
 
@@ -92,20 +94,33 @@ const ProductsPage = () => {
     }));
   };
 
-  const handleSubmit = (e) => {
+  const handleAddProduct = (e) => {
     e.preventDefault();
 
-    const product = {
-      id: products.length + 1,
-      name: newProduct.name,
-      category: newProduct.category,
-      price: `₹${newProduct.price}`,
-      stock: 100, // Default stock
-      status: "In Stock",
-    };
+    if (imageUrl.trim()) {
+      handleAddImage();
+    }
 
-    setProducts([...products, product]);
-    setShowModal(false);
+    const imagesToSend = imageUrl.trim()
+      ? [...newProduct.images, imageUrl.trim()]
+      : newProduct.images;
+
+    const totalStock = newProduct.variants.reduce((sum, v) => sum + v.stock, 0);
+
+    // Here you would make your API call
+    console.log("Product to add:", {
+      name: newProduct.name,
+      price: parseFloat(newProduct.price),
+      description: newProduct.description,
+      category: newProduct.category,
+      newArrival: newProduct.newArrival,
+      topSelling: newProduct.topSelling,
+      images: imagesToSend,
+      variants: newProduct.variants,
+      stock: totalStock,
+    });
+
+    // Reset form
     setNewProduct({
       name: "",
       price: "",
@@ -114,22 +129,20 @@ const ProductsPage = () => {
       newArrival: false,
       topSelling: false,
       images: [],
+      variants: [
+        { size: "Small", stock: 0 },
+        { size: "Medium", stock: 0 },
+        { size: "Large", stock: 0 },
+      ],
     });
-
-    // Log the complete product data in the required format
-    console.log("Product Added:", {
-      name: newProduct.name,
-      price: parseFloat(newProduct.price),
-      description: newProduct.description,
-      category: newProduct.category,
-      newArrival: newProduct.newArrival,
-      topSelling: newProduct.topSelling,
-      images: newProduct.images,
-    });
+    setImageUrl("");
+    setShowModal(false);
   };
-
+  useEffect(() => {
+    getProducts();
+  }, []);
   return (
-    <>
+    <div className="p-6">
       <div className="mb-8 flex items-center justify-between">
         <div>
           <h2 className="text-3xl font-bold text-gray-800">Products</h2>
@@ -149,6 +162,7 @@ const ProductsPage = () => {
           <table className="w-full">
             <thead className="bg-gray-50">
               <tr>
+                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider w-12"></th>
                 <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                   Product
                 </th>
@@ -159,7 +173,7 @@ const ProductsPage = () => {
                   Price
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                  Stock
+                  Total Stock
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                   Status
@@ -171,65 +185,189 @@ const ProductsPage = () => {
             </thead>
             <tbody className="divide-y divide-gray-100">
               {products.map((product) => (
-                <tr
-                  key={product.id}
-                  className="hover:bg-gray-50 transition-colors"
-                >
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
-                        <Package className="w-5 h-5 text-gray-600" />
+                <div key={product.id}>
+                  <tr
+                    key={product.id}
+                    className="hover:bg-gray-50 transition-colors"
+                  >
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <button
+                        onClick={() => toggleRow(product?.id)}
+                        className="p-1 hover:bg-gray-200 rounded transition-colors"
+                      >
+                        {expandedRows[product?.id] ? (
+                          <ChevronUp className="w-4 h-4 text-gray-600" />
+                        ) : (
+                          <ChevronDown className="w-4 h-4 text-gray-600" />
+                        )}
+                      </button>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center overflow-hidden">
+                          {product.images && product.images.length > 0 ? (
+                            <img
+                              src={product.images[0]}
+                              alt={product.name}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <Package className="w-5 h-5 text-gray-600" />
+                          )}
+                        </div>
+                        <span className="text-sm font-medium text-gray-800">
+                          {product.name}
+                        </span>
                       </div>
-                      <span className="text-sm font-medium text-gray-800">
-                        {product.name}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                      {product.category}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-800">
+                      {product.price}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                      {product.stock}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span
+                        className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                          product.status === "In Stock"
+                            ? "bg-green-100 text-green-800"
+                            : product.status === "Low Stock"
+                              ? "bg-yellow-100 text-yellow-800"
+                              : "bg-red-100 text-red-800"
+                        }`}
+                      >
+                        {product.status}
                       </span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                    {product.category}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-800">
-                    {product.price}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                    {product.stock}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span
-                      className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                        product.status === "In Stock"
-                          ? "bg-green-100 text-green-800"
-                          : product.status === "Low Stock"
-                            ? "bg-yellow-100 text-yellow-800"
-                            : "bg-red-100 text-red-800"
-                      }`}
-                    >
-                      {product.status}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm">
-                    <div className="flex items-center gap-2">
-                      <button
-                        className="p-1 hover:bg-gray-100 rounded"
-                        title="View"
-                      >
-                        <Eye className="w-4 h-4 text-gray-600" />
-                      </button>
-                      <button
-                        className="p-1 hover:bg-gray-100 rounded"
-                        title="Edit"
-                      >
-                        <Edit className="w-4 h-4 text-gray-600" />
-                      </button>
-                      <button
-                        className="p-1 hover:bg-gray-100 rounded"
-                        title="Delete"
-                      >
-                        <Trash2 className="w-4 h-4 text-red-600" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm">
+                      <div className="flex items-center gap-2">
+                        <button
+                          className="p-1 hover:bg-gray-100 rounded"
+                          title="View"
+                        >
+                          <Eye className="w-4 h-4 text-gray-600" />
+                        </button>
+                        <button
+                          className="p-1 hover:bg-gray-100 rounded"
+                          title="Edit"
+                        >
+                          <Edit className="w-4 h-4 text-gray-600" />
+                        </button>
+                        <button
+                          className="p-1 hover:bg-gray-100 rounded"
+                          title="Delete"
+                        >
+                          <Trash2 className="w-4 h-4 text-red-600" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+
+                  {/* Expanded Row - Tabs */}
+                  {expandedRows[product.id] && (
+                    <tr className="bg-gray-50">
+                      <td colSpan="7" className="px-6 py-4">
+                        <div className="ml-14">
+                          {/* Tab Navigation */}
+                          <div className="flex gap-4 border-b border-gray-200 mb-4">
+                            <button
+                              onClick={() =>
+                                setActiveTab((prev) => ({
+                                  ...prev,
+                                  [product.id]: "sizes",
+                                }))
+                              }
+                              className={`px-4 py-2 font-medium text-sm transition-colors ${
+                                (activeTab[product.id] || "sizes") === "sizes"
+                                  ? "text-black border-b-2 border-black"
+                                  : "text-gray-500 hover:text-gray-700"
+                              }`}
+                            >
+                              Sizes
+                            </button>
+                            <button
+                              onClick={() =>
+                                setActiveTab((prev) => ({
+                                  ...prev,
+                                  [product.id]: "images",
+                                }))
+                              }
+                              className={`px-4 py-2 font-medium text-sm transition-colors ${
+                                activeTab[product.id] === "images"
+                                  ? "text-black border-b-2 border-black"
+                                  : "text-gray-500 hover:text-gray-700"
+                              }`}
+                            >
+                              Images
+                            </button>
+                          </div>
+
+                          {/* Tab Content */}
+                          {(activeTab[product.id] || "sizes") === "sizes" && (
+                            <div>
+                              <h4 className="text-sm font-semibold text-gray-700 mb-3">
+                                Stock by Size
+                              </h4>
+                              <div className="grid grid-cols-3 gap-4 max-w-md">
+                                {product.variants.map((variant, index) => (
+                                  <div
+                                    key={index}
+                                    className="bg-white p-3 rounded-lg border border-gray-200"
+                                  >
+                                    <div className="text-xs text-gray-500 mb-1">
+                                      {variant.size}
+                                    </div>
+                                    <div className="text-lg font-semibold text-gray-800">
+                                      {variant.stock}
+                                      <span className="text-xs text-gray-500 font-normal ml-1">
+                                        units
+                                      </span>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {activeTab[product.id] === "images" && (
+                            <div>
+                              <h4 className="text-sm font-semibold text-gray-700 mb-3">
+                                Product Images
+                              </h4>
+                              {product.images && product.images.length > 0 ? (
+                                <div className="grid grid-cols-4 gap-4 max-w-3xl">
+                                  {product.images.map((image, index) => (
+                                    <div
+                                      key={index}
+                                      className="bg-white p-2 rounded-lg border border-gray-200 aspect-square"
+                                    >
+                                      <img
+                                        src={image}
+                                        alt={`${product.name} - ${index + 1}`}
+                                        className="w-full h-full object-cover rounded"
+                                        onError={(e) => {
+                                          e.target.src =
+                                            'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="gray"%3E%3Crect width="24" height="24"/%3E%3C/svg%3E';
+                                        }}
+                                      />
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <div className="text-sm text-gray-500 italic">
+                                  No images available
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </div>
               ))}
             </tbody>
           </table>
@@ -238,9 +376,8 @@ const ProductsPage = () => {
 
       {/* Add Product Modal */}
       {showModal && (
-        <div className="fixed inset-0  bg-opacity-10 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-            {/* Modal Header */}
             <div className="flex items-center justify-between p-6 border-b border-gray-100">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-black rounded-lg flex items-center justify-center">
@@ -258,8 +395,7 @@ const ProductsPage = () => {
               </button>
             </div>
 
-            {/* Modal Body */}
-            <form onSubmit={handleSubmit} className="p-6 space-y-5">
+            <div className="p-6 space-y-5">
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
                   Product Name *
@@ -327,7 +463,37 @@ const ProductsPage = () => {
                 ></textarea>
               </div>
 
-              {/* Product Tags */}
+              {/* Variant Stock Inputs */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-3">
+                  Stock by Size *
+                </label>
+                <div className="grid grid-cols-3 gap-4">
+                  {newProduct.variants.map((variant, index) => (
+                    <div key={index}>
+                      <label className="block text-xs text-gray-600 mb-1">
+                        {variant.size}
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={variant.stock}
+                        onChange={(e) =>
+                          handleVariantStockChange(index, e.target.value)
+                        }
+                        placeholder="0"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent"
+                      />
+                    </div>
+                  ))}
+                </div>
+                <p className="text-xs text-gray-500 mt-2">
+                  Total stock:{" "}
+                  {newProduct.variants.reduce((sum, v) => sum + v.stock, 0)}{" "}
+                  units
+                </p>
+              </div>
+
               <div className="flex gap-6">
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input
@@ -356,7 +522,6 @@ const ProductsPage = () => {
                 </label>
               </div>
 
-              {/* Image URLs */}
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
                   Product Images (URLs)
@@ -379,7 +544,6 @@ const ProductsPage = () => {
                   </button>
                 </div>
 
-                {/* Image List */}
                 {newProduct.images.length > 0 && (
                   <div className="space-y-2">
                     {newProduct.images.map((img, index) => (
@@ -412,7 +576,6 @@ const ProductsPage = () => {
                 )}
               </div>
 
-              {/* Modal Footer */}
               <div className="flex items-center gap-3 pt-4">
                 <button
                   type="button"
@@ -422,18 +585,19 @@ const ProductsPage = () => {
                   Cancel
                 </button>
                 <button
-                  type="submit"
+                  type="button"
+                  onClick={handleAddProduct}
                   className="flex-1 px-4 py-3 bg-black text-white rounded-lg hover:bg-gray-800 transition-colors font-medium flex items-center justify-center gap-2"
                 >
                   <Plus className="w-5 h-5" />
                   Add Product
                 </button>
               </div>
-            </form>
+            </div>
           </div>
         </div>
       )}
-    </>
+    </div>
   );
 };
 
