@@ -1,15 +1,12 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
-import AdminPanel from './components/adminPanel.jsx'
-function App() {
+import { useState } from "react";
+import "./App.css";
+import AdminPanel from "./components/adminPanel.jsx";
+import AdminLogin from "./components/adminLogin.jsx";
+import { useSelector } from "react-redux";
 
-  return (
-    <div className="App">
-      <AdminPanel />
-    </div>
-  )
+function App() {
+  const user = useSelector((state) => state.user.user);
+  return <div className="App">{user ? <AdminPanel /> : <AdminLogin />}</div>;
 }
 
-export default App
+export default App;
