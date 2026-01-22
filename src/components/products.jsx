@@ -37,6 +37,7 @@ const ProductsPage = () => {
   const [activeTab, setActiveTab] = useState({});
 
   const toggleRow = (productId) => {
+    console.log("Toggling row for product ID:", productId);
     setExpandedRows((prev) => ({
       ...prev,
       [productId]: !prev[productId],
@@ -94,70 +95,76 @@ const ProductsPage = () => {
     }));
   };
 
-const handleAddProduct = async (e) => {
-  try {
-    e.preventDefault();
+  const handleAddProduct = async (e) => {
+    try {
+      e.preventDefault();
 
-    if (imageUrl.trim()) {
-      handleAddImage();
+      if (imageUrl.trim()) {
+        handleAddImage();
+      }
+
+      const imagesToSend = imageUrl.trim()
+        ? [...newProduct.images, imageUrl.trim()]
+        : newProduct.images;
+
+      // Map variant sizes to match the enum: S, M, L
+      const mappedVariants = newProduct.variants.map((variant) => ({
+        size:
+          variant.size === "Small"
+            ? "S"
+            : variant.size === "Medium"
+              ? "M"
+              : "L",
+        sku: `${newProduct.name.substring(0, 3).toUpperCase()}-${variant.size === "Small" ? "S" : variant.size === "Medium" ? "M" : "L"}-${Date.now()}`,
+        stock: Number(variant.stock) || 0,
+      }));
+
+      // Make the API call with await
+      const response = await axios.post(
+        `${import.meta.env.VITE_APP_BASE_URL}/product`,
+        {
+          name: newProduct.name,
+          price: Number(newProduct.price),
+          description: newProduct.description,
+          category: newProduct.category,
+          newArrival: newProduct.newArrival,
+          topSelling: newProduct.topSelling,
+          images: imagesToSend,
+          variants: mappedVariants,
+        },
+        { withCredentials: true },
+      );
+
+      // Add the created product to state
+      setProducts((prev) => [...prev, response.data]);
+
+      // Reset form
+      setNewProduct({
+        name: "",
+        price: "",
+        description: "",
+        category: "",
+        newArrival: false,
+        topSelling: false,
+        images: [],
+        variants: [
+          { size: "Small", stock: 0 },
+          { size: "Medium", stock: 0 },
+          { size: "Large", stock: 0 },
+        ],
+      });
+      setImageUrl("");
+      setShowModal(false);
+
+      // Optional: Show success message
+      console.log("Product added successfully:", response.data);
+    } catch (error) {
+      console.error("Error adding product:", error);
+      // Optional: Show error message to user
+      alert(error.response?.data?.message || "Failed to add product");
     }
-
-    const imagesToSend = imageUrl.trim()
-      ? [...newProduct.images, imageUrl.trim()]
-      : newProduct.images;
-
-    // Map variant sizes to match the enum: S, M, L
-    const mappedVariants = newProduct.variants.map((variant) => ({
-      size: variant.size === "Small" ? "S" : variant.size === "Medium" ? "M" : "L",
-      sku: `${newProduct.name.substring(0, 3).toUpperCase()}-${variant.size === "Small" ? "S" : variant.size === "Medium" ? "M" : "L"}-${Date.now()}`,
-      stock: Number(variant.stock) || 0,
-    }));
-
-    // Make the API call with await
-    const response = await axios.post(
-      `${import.meta.env.VITE_APP_BASE_URL}/product`,
-      {
-        name: newProduct.name,
-        price: Number(newProduct.price),
-        description: newProduct.description,
-        category: newProduct.category,
-        newArrival: newProduct.newArrival,
-        topSelling: newProduct.topSelling,
-        images: imagesToSend,
-        variants: mappedVariants,
-      },
-      { withCredentials: true }
-    );
-
-    // Add the created product to state
-    setProducts((prev) => [...prev, response.data]);
-
-    // Reset form
-    setNewProduct({
-      name: "",
-      price: "",
-      description: "",
-      category: "",
-      newArrival: false,
-      topSelling: false,
-      images: [],
-      variants: [
-        { size: "Small", stock: 0 },
-        { size: "Medium", stock: 0 },
-        { size: "Large", stock: 0 },
-      ],
-    });
-    setImageUrl("");
-    setShowModal(false);
-
-    // Optional: Show success message
-    console.log("Product added successfully:", response.data);
-  } catch (error) {
-    console.error("Error adding product:", error);
-    // Optional: Show error message to user
-    alert(error.response?.data?.message || "Failed to add product");
-  }
-};
+  };
+  console.log("Products:", products);
   useEffect(() => {
     getProducts();
   }, []);
@@ -204,7 +211,7 @@ const handleAddProduct = async (e) => {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {products.map((product) => (
+              {products?.map((product) => (
                 <>
                   <tr
                     key={product.id}
@@ -212,10 +219,13 @@ const handleAddProduct = async (e) => {
                   >
                     <td className="px-6 py-4 whitespace-nowrap">
                       <button
-                        onClick={() => toggleRow(product?.id)}
+                        onClick={() => {
+                          console.log("product id", product?._id);
+                          toggleRow(product?._id);
+                        }}
                         className="p-1 hover:bg-gray-200 rounded transition-colors"
                       >
-                        {expandedRows[product?.id] ? (
+                        {expandedRows[product?._id] ? (
                           <ChevronUp className="w-4 h-4 text-gray-600" />
                         ) : (
                           <ChevronDown className="w-4 h-4 text-gray-600" />
@@ -247,20 +257,23 @@ const handleAddProduct = async (e) => {
                       {product.price}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                      {product.stock}
+                      {product.variants.reduce((sum, v) => sum + v.stock, 0)}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span
-                        className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                          product.status === "In Stock"
-                            ? "bg-green-100 text-green-800"
-                            : product.status === "Low Stock"
-                              ? "bg-yellow-100 text-yellow-800"
-                              : "bg-red-100 text-red-800"
-                        }`}
-                      >
-                        {product.status}
-                      </span>
+                    <td className=" py-4 whitespace-nowrap text-sm flex gap-2">
+                      {product.variants.map((v) => (
+                        <span
+                          key={v._id}
+                          className={`px-2 py-1 rounded-full text-xs font-semibold ${
+                            v.stock < 4
+                              ? "bg-red-100 text-red-800"
+                              : v.stock >= 5 && v.stock <= 10
+                                ? "bg-yellow-100 text-yellow-800"
+                                : "bg-green-100 text-green-800"
+                          }`}
+                        >
+                          {v.size} : {v.stock}
+                        </span>
+                      ))}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm">
                       <div className="flex items-center gap-2">
@@ -287,7 +300,7 @@ const handleAddProduct = async (e) => {
                   </tr>
 
                   {/* Expanded Row - Tabs */}
-                  {expandedRows[product.id] && (
+                  {expandedRows[product._id] && (
                     <tr className="bg-gray-50">
                       <td colSpan="7" className="px-6 py-4">
                         <div className="ml-14">
@@ -297,11 +310,11 @@ const handleAddProduct = async (e) => {
                               onClick={() =>
                                 setActiveTab((prev) => ({
                                   ...prev,
-                                  [product.id]: "sizes",
+                                  [product._id]: "sizes",
                                 }))
                               }
                               className={`px-4 py-2 font-medium text-sm transition-colors ${
-                                (activeTab[product.id] || "sizes") === "sizes"
+                                (activeTab[product._id] || "sizes") === "sizes"
                                   ? "text-black border-b-2 border-black"
                                   : "text-gray-500 hover:text-gray-700"
                               }`}
@@ -312,11 +325,11 @@ const handleAddProduct = async (e) => {
                               onClick={() =>
                                 setActiveTab((prev) => ({
                                   ...prev,
-                                  [product.id]: "images",
+                                  [product._id]: "images",
                                 }))
                               }
                               className={`px-4 py-2 font-medium text-sm transition-colors ${
-                                activeTab[product.id] === "images"
+                                activeTab[product._id] === "images"
                                   ? "text-black border-b-2 border-black"
                                   : "text-gray-500 hover:text-gray-700"
                               }`}
@@ -326,7 +339,7 @@ const handleAddProduct = async (e) => {
                           </div>
 
                           {/* Tab Content */}
-                          {(activeTab[product.id] || "sizes") === "sizes" && (
+                          {(activeTab[product._id] || "sizes") === "sizes" && (
                             <div>
                               <h4 className="text-sm font-semibold text-gray-700 mb-3">
                                 Stock by Size
@@ -509,7 +522,10 @@ const handleAddProduct = async (e) => {
                 </div>
                 <p className="text-xs text-gray-500 mt-2">
                   Total stock:{" "}
-                  {newProduct.variants.reduce((sum, v) => sum + v.stock, 0)}{" "}
+                  {newProduct.variants.reduce(
+                    (sum, v) => sum + parseInt(v.stock || 0, 10),
+                    0,
+                  )}{" "}
                   units
                 </p>
               </div>
