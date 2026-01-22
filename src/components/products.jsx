@@ -94,7 +94,8 @@ const ProductsPage = () => {
     }));
   };
 
-  const handleAddProduct = (e) => {
+const handleAddProduct = async (e) => {
+  try {
     e.preventDefault();
 
     if (imageUrl.trim()) {
@@ -105,20 +106,31 @@ const ProductsPage = () => {
       ? [...newProduct.images, imageUrl.trim()]
       : newProduct.images;
 
-    const totalStock = newProduct.variants.reduce((sum, v) => sum + v.stock, 0);
+    // Map variant sizes to match the enum: S, M, L
+    const mappedVariants = newProduct.variants.map((variant) => ({
+      size: variant.size === "Small" ? "S" : variant.size === "Medium" ? "M" : "L",
+      sku: `${newProduct.name.substring(0, 3).toUpperCase()}-${variant.size === "Small" ? "S" : variant.size === "Medium" ? "M" : "L"}-${Date.now()}`,
+      stock: Number(variant.stock) || 0,
+    }));
 
-    // Here you would make your API call
-    console.log("Product to add:", {
-      name: newProduct.name,
-      price: parseFloat(newProduct.price),
-      description: newProduct.description,
-      category: newProduct.category,
-      newArrival: newProduct.newArrival,
-      topSelling: newProduct.topSelling,
-      images: imagesToSend,
-      variants: newProduct.variants,
-      stock: totalStock,
-    });
+    // Make the API call with await
+    const response = await axios.post(
+      `${import.meta.env.VITE_APP_BASE_URL}/product`,
+      {
+        name: newProduct.name,
+        price: Number(newProduct.price),
+        description: newProduct.description,
+        category: newProduct.category,
+        newArrival: newProduct.newArrival,
+        topSelling: newProduct.topSelling,
+        images: imagesToSend,
+        variants: mappedVariants,
+      },
+      { withCredentials: true }
+    );
+
+    // Add the created product to state
+    setProducts((prev) => [...prev, response.data]);
 
     // Reset form
     setNewProduct({
@@ -137,7 +149,15 @@ const ProductsPage = () => {
     });
     setImageUrl("");
     setShowModal(false);
-  };
+
+    // Optional: Show success message
+    console.log("Product added successfully:", response.data);
+  } catch (error) {
+    console.error("Error adding product:", error);
+    // Optional: Show error message to user
+    alert(error.response?.data?.message || "Failed to add product");
+  }
+};
   useEffect(() => {
     getProducts();
   }, []);
@@ -376,7 +396,7 @@ const ProductsPage = () => {
 
       {/* Add Product Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0  bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between p-6 border-b border-gray-100">
               <div className="flex items-center gap-3">
