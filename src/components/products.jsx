@@ -1,3 +1,4 @@
+import axios from "axios";
 import {
   Eye,
   Edit,
@@ -10,8 +11,7 @@ import {
   ChevronDown,
   ChevronUp,
 } from "lucide-react";
-import { use, useEffect, useState } from "react";
-import axios from "axios";
+import { useEffect, useState } from "react";
 
 const ProductsPage = () => {
   const [showModal, setShowModal] = useState(false);
@@ -33,7 +33,7 @@ const ProductsPage = () => {
     ],
   });
 
-  const [imageUrl, setImageUrl] = useState("");
+  const [imageInputs, setImageInputs] = useState([{ id: 1, url: "" }]);
   const [activeTab, setActiveTab] = useState({});
 
   const toggleRow = (productId) => {
@@ -42,7 +42,6 @@ const ProductsPage = () => {
       ...prev,
       [productId]: !prev[productId],
     }));
-    // Set default tab to 'sizes' when expanding
     if (!expandedRows[productId]) {
       setActiveTab((prev) => ({
         ...prev,
@@ -50,17 +49,36 @@ const ProductsPage = () => {
       }));
     }
   };
+
   const getProducts = async () => {
     try {
+      // Simulated API call - replace with your actual endpoint
       const response = await axios.get(
         `${import.meta.env.VITE_APP_BASE_URL}/products?skip=0&limit=50`,
         { withCredentials: true },
       );
       setProducts(response.data);
+      
+      // Demo data
+      // setProducts([
+      //   {
+      //     _id: "1",
+      //     name: "Slim Fit Chinos",
+      //     category: "LowerWear",
+      //     price: 64.99,
+      //     images: ["https://images.unsplash.com/photo-1473966968600-fa801b869a1a?w=400"],
+      //     variants: [
+      //       { _id: "1a", size: "S", stock: 12 },
+      //       { _id: "1b", size: "M", stock: 8 },
+      //       { _id: "1c", size: "L", stock: 3 },
+      //     ],
+      //   },
+      // ]);
     } catch (error) {
       console.error("Error fetching products:", error);
     }
   };
+
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
     setNewProduct((prev) => ({
@@ -78,14 +96,21 @@ const ProductsPage = () => {
     }));
   };
 
-  const handleAddImage = () => {
-    if (imageUrl.trim()) {
-      setNewProduct((prev) => ({
-        ...prev,
-        images: [...prev.images, imageUrl.trim()],
-      }));
-      setImageUrl("");
+  const handleAddImageInput = () => {
+    const newId = Math.max(...imageInputs.map(input => input.id)) + 1;
+    setImageInputs([...imageInputs, { id: newId, url: "" }]);
+  };
+
+  const handleRemoveImageInput = (id) => {
+    if (imageInputs.length > 1) {
+      setImageInputs(imageInputs.filter(input => input.id !== id));
     }
+  };
+
+  const handleImageUrlChange = (id, value) => {
+    setImageInputs(imageInputs.map(input => 
+      input.id === id ? { ...input, url: value } : input
+    ));
   };
 
   const handleRemoveImage = (index) => {
@@ -99,15 +124,14 @@ const ProductsPage = () => {
     try {
       e.preventDefault();
 
-      if (imageUrl.trim()) {
-        handleAddImage();
-      }
+      // Collect all valid URLs from image inputs
+      const validUrls = imageInputs
+        .map(input => input.url.trim())
+        .filter(url => url !== "");
 
-      const imagesToSend = imageUrl.trim()
-        ? [...newProduct.images, imageUrl.trim()]
-        : newProduct.images;
+      // Combine with existing images
+      const allImages = [...newProduct.images, ...validUrls];
 
-      // Map variant sizes to match the enum: S, M, L
       const mappedVariants = newProduct.variants.map((variant) => ({
         size:
           variant.size === "Small"
@@ -119,7 +143,7 @@ const ProductsPage = () => {
         stock: Number(variant.stock) || 0,
       }));
 
-      // Make the API call with await
+      // Simulated API call - uncomment and use your actual endpoint
       const response = await axios.post(
         `${import.meta.env.VITE_APP_BASE_URL}/product`,
         {
@@ -129,14 +153,26 @@ const ProductsPage = () => {
           category: newProduct.category,
           newArrival: newProduct.newArrival,
           topSelling: newProduct.topSelling,
-          images: imagesToSend,
+          images: allImages,
           variants: mappedVariants,
         },
         { withCredentials: true },
       );
 
-      // Add the created product to state
-      setProducts((prev) => [...prev, response.data]);
+      // Demo: Add product to state
+      const newProductData = {
+        _id: Date.now().toString(),
+        name: newProduct.name,
+        price: Number(newProduct.price),
+        description: newProduct.description,
+        category: newProduct.category,
+        newArrival: newProduct.newArrival,
+        topSelling: newProduct.topSelling,
+        images: allImages,
+        variants: mappedVariants.map((v, i) => ({ ...v, _id: `${Date.now()}-${i}` })),
+      };
+
+      setProducts((prev) => [...prev, newProductData]);
 
       // Reset form
       setNewProduct({
@@ -153,21 +189,20 @@ const ProductsPage = () => {
           { size: "Large", stock: 0 },
         ],
       });
-      setImageUrl("");
+      setImageInputs([{ id: 1, url: "" }]);
       setShowModal(false);
 
-      // Optional: Show success message
-      console.log("Product added successfully:", response.data);
+      console.log("Product added successfully:", newProductData);
     } catch (error) {
       console.error("Error adding product:", error);
-      // Optional: Show error message to user
       alert(error.response?.data?.message || "Failed to add product");
     }
   };
-  console.log("Products:", products);
+
   useEffect(() => {
     getProducts();
   }, []);
+
   return (
     <div className="p-6">
       <div className="mb-8 flex items-center justify-between">
@@ -214,18 +249,15 @@ const ProductsPage = () => {
               {products?.map((product) => (
                 <>
                   <tr
-                    key={product.id}
+                    key={product._id}
                     className="hover:bg-gray-50 transition-colors"
                   >
                     <td className="px-6 py-4 whitespace-nowrap">
                       <button
-                        onClick={() => {
-                          console.log("product id", product?._id);
-                          toggleRow(product?._id);
-                        }}
+                        onClick={() => toggleRow(product._id)}
                         className="p-1 hover:bg-gray-200 rounded transition-colors"
                       >
-                        {expandedRows[product?._id] ? (
+                        {expandedRows[product._id] ? (
                           <ChevronUp className="w-4 h-4 text-gray-600" />
                         ) : (
                           <ChevronDown className="w-4 h-4 text-gray-600" />
@@ -254,12 +286,12 @@ const ProductsPage = () => {
                       {product.category}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-800">
-                      {product.price}
+                      ₹{product.price}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
                       {product.variants.reduce((sum, v) => sum + v.stock, 0)}
                     </td>
-                    <td className=" py-4 whitespace-nowrap text-sm flex gap-2">
+                    <td className="py-4 whitespace-nowrap text-sm flex gap-2">
                       {product.variants.map((v) => (
                         <span
                           key={v._id}
@@ -299,12 +331,10 @@ const ProductsPage = () => {
                     </td>
                   </tr>
 
-                  {/* Expanded Row - Tabs */}
                   {expandedRows[product._id] && (
                     <tr className="bg-gray-50">
                       <td colSpan="7" className="px-6 py-4">
                         <div className="ml-14">
-                          {/* Tab Navigation */}
                           <div className="flex gap-4 border-b border-gray-200 mb-4">
                             <button
                               onClick={() =>
@@ -338,7 +368,6 @@ const ProductsPage = () => {
                             </button>
                           </div>
 
-                          {/* Tab Content */}
                           {(activeTab[product._id] || "sizes") === "sizes" && (
                             <div>
                               <h4 className="text-sm font-semibold text-gray-700 mb-3">
@@ -365,7 +394,7 @@ const ProductsPage = () => {
                             </div>
                           )}
 
-                          {activeTab[product.id] === "images" && (
+                          {activeTab[product._id] === "images" && (
                             <div>
                               <h4 className="text-sm font-semibold text-gray-700 mb-3">
                                 Product Images
@@ -407,7 +436,6 @@ const ProductsPage = () => {
         </div>
       </div>
 
-      {/* Add Product Modal */}
       {showModal && (
         <div className="fixed inset-0  bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
@@ -496,7 +524,6 @@ const ProductsPage = () => {
                 ></textarea>
               </div>
 
-              {/* Variant Stock Inputs */}
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-3">
                   Stock by Size *
@@ -562,26 +589,44 @@ const ProductsPage = () => {
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
                   Product Images (URLs)
                 </label>
-                <div className="flex gap-2 mb-3">
-                  <input
-                    type="url"
-                    value={imageUrl}
-                    onChange={(e) => setImageUrl(e.target.value)}
-                    placeholder="https://images.unsplash.com/photo-..."
-                    className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleAddImage}
-                    className="px-4 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium flex items-center gap-2"
-                  >
-                    <Upload className="w-4 h-4" />
-                    Add
-                  </button>
+                
+                {/* Dynamic Image Input Fields */}
+                <div className="space-y-3 mb-3">
+                  {imageInputs.map((input) => (
+                    <div key={input.id} className="flex gap-2">
+                      <input
+                        type="url"
+                        value={input.url}
+                        onChange={(e) => handleImageUrlChange(input.id, e.target.value)}
+                        placeholder="https://images.unsplash.com/photo-..."
+                        className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent"
+                      />
+                      {imageInputs.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveImageInput(input.id)}
+                          className="px-3 py-3 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition-colors"
+                          aria-label="Remove image input"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
                 </div>
 
+                <button
+                  type="button"
+                  onClick={handleAddImageInput}
+                  className="px-4 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium flex items-center gap-2"
+                >
+                  <Upload className="w-4 h-4" />
+                  Add More
+                </button>
+
                 {newProduct.images.length > 0 && (
-                  <div className="space-y-2">
+                  <div className="space-y-2 mt-4">
+                    <p className="text-sm font-semibold text-gray-700">Added Images:</p>
                     {newProduct.images.map((img, index) => (
                       <div
                         key={index}
@@ -636,4 +681,5 @@ const ProductsPage = () => {
     </div>
   );
 };
+
 export default ProductsPage;
