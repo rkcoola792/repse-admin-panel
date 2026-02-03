@@ -7,6 +7,7 @@ const OrdersPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [newDeliveryStatus, setNewDeliveryStatus] = useState("");
   const [updateLoading, setUpdateLoading] = useState(false);
@@ -27,7 +28,7 @@ const OrdersPage = () => {
         { withCredentials: true },
       );
       const data = response.data;
-      setOrders(data);
+      setOrders(data.filter((order) => order.status === "captured"));
     } catch (error) {
       console.error("Error fetching orders:", error);
       setError(error.message);
@@ -36,10 +37,22 @@ const OrdersPage = () => {
     }
   };
 
-  const handleEditClick = (order) => {
+  const handleEditClick = (order, e) => {
+    e.stopPropagation();
     setSelectedOrder(order);
     setNewDeliveryStatus(order.deliveryStatus || "pending");
     setIsModalOpen(true);
+  };
+
+  const handleViewClick = (order, e) => {
+    e.stopPropagation();
+    setSelectedOrder(order);
+    setIsDetailsModalOpen(true);
+  };
+
+  const handleRowClick = (order) => {
+    setSelectedOrder(order);
+    setIsDetailsModalOpen(true);
   };
 
   const handleCloseModal = () => {
@@ -48,20 +61,23 @@ const OrdersPage = () => {
     setNewDeliveryStatus("");
   };
 
+  const handleCloseDetailsModal = () => {
+    setIsDetailsModalOpen(false);
+    setSelectedOrder(null);
+  };
+
   const handleUpdateStatus = async () => {
     if (!selectedOrder) return;
 
     try {
       setUpdateLoading(true);
       const orderId = selectedOrder._id?.$oid || selectedOrder._id;
-      console.log("Updating order ID:", orderId);
       await axios.put(
         `${import.meta.env.VITE_APP_BASE_URL}/update-delivery-status`,
         { deliveryStatus: newDeliveryStatus, orderId: orderId },
         { withCredentials: true },
       );
 
-      // Update the local state
       setOrders(
         orders.map((order) => {
           const currentOrderId = order._id?.$oid || order._id;
@@ -73,11 +89,8 @@ const OrdersPage = () => {
       );
 
       handleCloseModal();
-      // Optionally show success message
-      // alert("Delivery status updated successfully!");
     } catch (error) {
       console.error("Error updating delivery status:", error);
-      // alert("Failed to update delivery status. Please try again.");
     } finally {
       setUpdateLoading(false);
     }
@@ -129,6 +142,10 @@ const OrdersPage = () => {
     if (!items || items.length === 0) return "No items";
     if (items.length === 1) return items[0].name;
     return `${items[0].name} +${items.length - 1} more`;
+  };
+
+  const calculateItemTotal = (item) => {
+    return (item.amount * item.quantity).toFixed(2);
   };
 
   if (loading && orders.length === 0) {
@@ -220,7 +237,8 @@ const OrdersPage = () => {
                 orders.map((order) => (
                   <tr
                     key={order._id?.$oid || order._id}
-                    className="hover:bg-gray-50 transition-colors"
+                    onClick={() => handleRowClick(order)}
+                    className="hover:bg-gray-50 transition-colors cursor-pointer"
                   >
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-800">
                       {order.orderId || order.receipt}
@@ -254,19 +272,21 @@ const OrdersPage = () => {
                     <td className="px-6 py-4 whitespace-nowrap text-sm">
                       <div className="flex items-center gap-2">
                         <button
+                          onClick={(e) => handleViewClick(order, e)}
                           className="p-1 hover:bg-gray-100 rounded"
                           title="View"
                         >
                           <Eye className="w-4 h-4 text-gray-600" />
                         </button>
                         <button
-                          onClick={() => handleEditClick(order)}
+                          onClick={(e) => handleEditClick(order, e)}
                           className="p-1 hover:bg-gray-100 rounded"
                           title="Edit"
                         >
                           <Edit className="w-4 h-4 text-gray-600" />
                         </button>
                         <button
+                          onClick={(e) => e.stopPropagation()}
                           className="p-1 hover:bg-gray-100 rounded"
                           title="Delete"
                         >
@@ -282,9 +302,222 @@ const OrdersPage = () => {
         </div>
       </div>
 
+      {/* Order Details Modal */}
+      {isDetailsModalOpen && selectedOrder && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center">
+              <h3 className="text-2xl font-bold text-gray-800">
+                Order Details
+              </h3>
+              <button
+                onClick={handleCloseDetailsModal}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            <div className="p-6">
+              {/* Order Information */}
+              <div className="mb-6">
+                <h4 className="text-lg font-semibold text-gray-800 mb-3 flex items-center">
+                  <span className="w-1 h-6 bg-blue-600 mr-2"></span>
+                  Order Information
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-gray-50 p-4 rounded-lg">
+                  <div>
+                    <p className="text-xs text-gray-500 uppercase font-medium mb-1">
+                      Order ID
+                    </p>
+                    <p className="font-semibold text-gray-800">
+                      {selectedOrder.orderId || selectedOrder.receipt}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500 uppercase font-medium mb-1">
+                      Delivery Status
+                    </p>
+                    <span
+                      className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${getStatusColor(selectedOrder.deliveryStatus)}`}
+                    >
+                      {formatStatus(selectedOrder.deliveryStatus)}
+                    </span>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500 uppercase font-medium mb-1">
+                      Total Amount
+                    </p>
+                    <p className="font-semibold text-gray-800 text-lg">
+                      ₹{selectedOrder.amount}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500 uppercase font-medium mb-1">
+                      Payment Status
+                    </p>
+                    <p className="font-semibold text-gray-800 capitalize">
+                      {selectedOrder.status}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500 uppercase font-medium mb-1">
+                      Order Date
+                    </p>
+                    <p className="font-semibold text-gray-800">
+                      {formatDate(selectedOrder.createdAt)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500 uppercase font-medium mb-1">
+                      Last Updated
+                    </p>
+                    <p className="font-semibold text-gray-800">
+                      {formatDate(selectedOrder.updatedAt)}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Customer Information */}
+              <div className="mb-6">
+                <h4 className="text-lg font-semibold text-gray-800 mb-3 flex items-center">
+                  <span className="w-1 h-6 bg-blue-600 mr-2"></span>
+                  Customer Information
+                </h4>
+                <div className="bg-gray-50 p-4 rounded-lg space-y-3">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-xs text-gray-500 uppercase font-medium mb-1">
+                        Full Name
+                      </p>
+                      <p className="font-semibold text-gray-800">
+                        {selectedOrder.notes?.first_name || "N/A"}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500 uppercase font-medium mb-1">
+                        Email Address
+                      </p>
+                      <p className="font-semibold text-gray-800 break-all">
+                        {selectedOrder.notes?.email || "N/A"}
+                      </p>
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500 uppercase font-medium mb-1">
+                      Mobile Number
+                    </p>
+                    <p className="font-semibold text-gray-800">
+                      {selectedOrder.notes?.mobile || "N/A"}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500 uppercase font-medium mb-1">
+                      Delivery Address
+                    </p>
+                    <p className="font-semibold text-gray-800 leading-relaxed">
+                      {selectedOrder.notes?.address || "N/A"}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Order Items */}
+              <div className="mb-4">
+                <h4 className="text-lg font-semibold text-gray-800 mb-3 flex items-center">
+                  <span className="w-1 h-6 bg-blue-600 mr-2"></span>
+                  Order Items ({selectedOrder.items?.length || 0})
+                </h4>
+                <div className="space-y-3">
+                  {selectedOrder.items?.map((item, index) => (
+                    <div
+                      key={index}
+                      className="bg-gray-50 p-4 rounded-lg hover:bg-gray-100 transition-colors"
+                    >
+                      <div className="flex justify-between items-start">
+                        <div className="flex-1">
+                          <p className="font-semibold text-gray-800 text-lg mb-2">
+                            {item.name}
+                          </p>
+                          <div className="grid grid-cols-2 gap-x-6 gap-y-1">
+                            <div className="flex items-center">
+                              <span className="text-xs text-gray-500 uppercase font-medium mr-2">
+                                Size:
+                              </span>
+                              <span className="text-sm font-medium text-gray-700">
+                                {item.size}
+                              </span>
+                            </div>
+                            <div className="flex items-center">
+                              <span className="text-xs text-gray-500 uppercase font-medium mr-2">
+                                Quantity:
+                              </span>
+                              <span className="text-sm font-medium text-gray-700">
+                                {item.quantity}
+                              </span>
+                            </div>
+                            <div className="flex items-center">
+                              <span className="text-xs text-gray-500 uppercase font-medium mr-2">
+                                Unit Price:
+                              </span>
+                              <span className="text-sm font-medium text-gray-700">
+                                ₹{item.amount/100}
+                              </span>
+                            </div>
+                            <div className="flex items-center">
+                              <span className="text-xs text-gray-500 uppercase font-medium mr-2">
+                                Currency:
+                              </span>
+                              <span className="text-sm font-medium text-gray-700">
+                                {item.currency}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="text-right ml-4">
+                          <p className="text-xs text-gray-500 uppercase font-medium mb-1">
+                            Subtotal
+                          </p>
+                          <p className="font-bold text-gray-800 text-xl">
+                            ₹{calculateItemTotal(item)/100}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex gap-3 pt-4 border-t border-gray-200">
+                <button
+                  onClick={handleCloseDetailsModal}
+                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors font-medium"
+                >
+                  Close
+                </button>
+                <button
+                  onClick={() => {
+                    handleCloseDetailsModal();
+                    setNewDeliveryStatus(
+                      selectedOrder.deliveryStatus || "pending",
+                    );
+                    setIsModalOpen(true);
+                  }}
+                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors font-medium"
+                >
+                  Update Status
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Edit Delivery Status Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-black/50 bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-xl font-bold text-gray-800">
@@ -292,7 +525,7 @@ const OrdersPage = () => {
               </h3>
               <button
                 onClick={handleCloseModal}
-                className="text-gray-400 hover:text-gray-600"
+                className="text-gray-400 hover:text-gray-600 transition-colors"
               >
                 <X className="w-6 h-6" />
               </button>
@@ -333,14 +566,14 @@ const OrdersPage = () => {
             <div className="flex gap-3">
               <button
                 onClick={handleCloseModal}
-                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50"
+                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={handleUpdateStatus}
                 disabled={updateLoading}
-                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 {updateLoading ? "Updating..." : "Update Status"}
               </button>
