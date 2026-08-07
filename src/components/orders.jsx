@@ -28,7 +28,7 @@ const OrdersPage = () => {
         { withCredentials: true },
       );
       const data = response.data;
-      setOrders(data.filter((order) => order.status === "captured"));
+      setOrders(data);
     } catch (error) {
       console.error("Error fetching orders:", error);
       setError(error.message);
