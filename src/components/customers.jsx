@@ -1,12 +1,22 @@
-import axios from "axios";
-import { Eye, Edit, Trash2, UserPlus, X } from "lucide-react";
-import { useState, useEffect } from "react";
+import { Eye, Edit, Trash2, X } from "lucide-react";
+import { useState, useEffect, useMemo } from "react";
+import { useSelector } from "react-redux";
+import api from "../api/axios";
+import ConfirmDialog from "./confirmDialog";
 
-const CustomersPage = () => {
+const CustomersPage = ({ searchQuery = "" }) => {
+  const currentUser = useSelector((state) => state.user.user);
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
+  const [saveError, setSaveError] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
   const [formData, setFormData] = useState({
     name: "",
     lastName: "",
@@ -19,14 +29,12 @@ const CustomersPage = () => {
   const getUsers = async () => {
     try {
       setLoading(true);
-      const response = await axios.get(
-        `${import.meta.env.VITE_APP_BASE_URL}/get-users`,
-        { withCredentials: true },
-      );
+      setError("");
+      const response = await api.get("/get-users");
       setCustomers(response.data);
-      console.log(response.data);
     } catch (error) {
       console.error("Error fetching users:", error);
+      setError(error.response?.data?.error || "Failed to load customers");
     } finally {
       setLoading(false);
     }
@@ -36,7 +44,6 @@ const CustomersPage = () => {
     getUsers();
   }, []);
 
-  // Helper function to format date
   const formatDate = (dateString) => {
     const date = new Date(dateString);
     return date.toLocaleDateString("en-US", {
@@ -45,14 +52,13 @@ const CustomersPage = () => {
     });
   };
 
-  // Helper function to get full name
   const getFullName = (user) => {
     return `${user.name} ${user.lastName || ""}`.trim();
   };
 
-  // Open edit modal
   const handleEditClick = (customer) => {
     setSelectedCustomer(customer);
+    setSaveError("");
     setFormData({
       name: customer.name,
       lastName: customer.lastName || "",
@@ -64,9 +70,14 @@ const CustomersPage = () => {
     setIsEditModalOpen(true);
   };
 
-  // Close modal
+  const handleViewClick = (customer) => {
+    setSelectedCustomer(customer);
+    setIsViewModalOpen(true);
+  };
+
   const handleCloseModal = () => {
     setIsEditModalOpen(false);
+    setIsViewModalOpen(false);
     setSelectedCustomer(null);
     setFormData({
       name: "",
@@ -78,7 +89,6 @@ const CustomersPage = () => {
     });
   };
 
-  // Handle form input change
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({
@@ -87,17 +97,16 @@ const CustomersPage = () => {
     }));
   };
 
-  // Handle form submission
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setSaveError("");
     try {
-      const response = await axios.put(
-        `${import.meta.env.VITE_APP_BASE_URL}/update-user`,
-        { id: selectedCustomer._id, ...formData },
-        { withCredentials: true },
-      );
+      setSaving(true);
+      const response = await api.put("/update-user", {
+        id: selectedCustomer._id,
+        ...formData,
+      });
 
-      // Update the customer in the list with the response data
       setCustomers((prev) =>
         prev.map((customer) =>
           customer._id === selectedCustomer._id
@@ -106,37 +115,65 @@ const CustomersPage = () => {
         ),
       );
 
-      // alert("Customer updated successfully!");
       handleCloseModal();
     } catch (error) {
       console.error("Error updating customer:", error);
-      const errorMessage =
+      setSaveError(
         error.response?.data?.error ||
-        "Failed to update customer. Please try again.";
-      // alert(errorMessage);
+          "Failed to update customer. Please try again.",
+      );
+    } finally {
+      setSaving(false);
     }
   };
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    try {
+      setDeleting(true);
+      setDeleteError("");
+      await api.delete(`/user/${deleteTarget._id}`);
+      setCustomers((prev) => prev.filter((c) => c._id !== deleteTarget._id));
+      setDeleteTarget(null);
+    } catch (error) {
+      setDeleteError(
+        error.response?.data?.error || "Failed to delete customer",
+      );
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const filteredCustomers = useMemo(() => {
+    if (!searchQuery) return customers;
+    const q = searchQuery.toLowerCase();
+    return customers.filter(
+      (c) =>
+        getFullName(c).toLowerCase().includes(q) ||
+        (c.email || "").toLowerCase().includes(q),
+    );
+  }, [customers, searchQuery]);
 
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <p className="text-gray-500">Loading customers...</p>
+        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-gray-900"></div>
       </div>
     );
   }
 
   return (
     <>
-      <div className="mb-8 flex items-center justify-between">
-        <div>
-          <h2 className="text-3xl font-bold text-gray-800">Customers</h2>
-          <p className="text-gray-500 mt-1">View and manage your customers</p>
-        </div>
-        <button className="px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-800 transition-colors font-medium flex items-center gap-2">
-          <UserPlus className="w-4 h-4" />
-          Add Customer
-        </button>
+      <div className="mb-8">
+        <h2 className="text-3xl font-bold text-gray-800">Customers</h2>
+        <p className="text-gray-500 mt-1">View and manage your customers</p>
       </div>
+
+      {error && (
+        <div className="mb-4 bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3">
+          {error}
+        </div>
+      )}
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-100">
         <div className="overflow-x-auto">
@@ -167,7 +204,7 @@ const CustomersPage = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {customers.length === 0 ? (
+              {filteredCustomers.length === 0 ? (
                 <tr>
                   <td
                     colSpan="7"
@@ -177,7 +214,7 @@ const CustomersPage = () => {
                   </td>
                 </tr>
               ) : (
-                customers.map((customer) => (
+                filteredCustomers.map((customer) => (
                   <tr
                     key={customer._id}
                     className="hover:bg-gray-50 transition-colors"
@@ -225,6 +262,7 @@ const CustomersPage = () => {
                         <button
                           className="p-1 hover:bg-gray-100 rounded"
                           title="View"
+                          onClick={() => handleViewClick(customer)}
                         >
                           <Eye className="w-4 h-4 text-gray-600" />
                         </button>
@@ -236,8 +274,17 @@ const CustomersPage = () => {
                           <Edit className="w-4 h-4 text-gray-600" />
                         </button>
                         <button
-                          className="p-1 hover:bg-gray-100 rounded"
-                          title="Delete"
+                          className="p-1 hover:bg-gray-100 rounded disabled:opacity-30 disabled:cursor-not-allowed"
+                          title={
+                            customer._id === currentUser?._id
+                              ? "You can't delete your own account"
+                              : "Delete"
+                          }
+                          disabled={customer._id === currentUser?._id}
+                          onClick={() => {
+                            setDeleteError("");
+                            setDeleteTarget(customer);
+                          }}
                         >
                           <Trash2 className="w-4 h-4 text-red-600" />
                         </button>
@@ -250,6 +297,64 @@ const CustomersPage = () => {
           </table>
         </div>
       </div>
+
+      {/* View Modal */}
+      {isViewModalOpen && selectedCustomer && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg mx-4">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <h3 className="text-xl font-bold text-gray-800">Customer Details</h3>
+              <button
+                onClick={handleCloseModal}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5 text-gray-600" />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="flex items-center gap-4">
+                <div className="w-14 h-14 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white text-xl font-semibold">
+                  {selectedCustomer.name.charAt(0).toUpperCase()}
+                </div>
+                <div>
+                  <p className="font-semibold text-gray-800">{getFullName(selectedCustomer)}</p>
+                  <p className="text-sm text-gray-500">{selectedCustomer.email}</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <p className="text-xs text-gray-500 uppercase font-medium mb-1">Mobile</p>
+                  <p className="text-gray-800">{selectedCustomer.mobile || "N/A"}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500 uppercase font-medium mb-1">Role</p>
+                  <p className="text-gray-800 capitalize">{selectedCustomer.role}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500 uppercase font-medium mb-1">Joined</p>
+                  <p className="text-gray-800">{formatDate(selectedCustomer.createdAt)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500 uppercase font-medium mb-1">Gender</p>
+                  <p className="text-gray-800 capitalize">{selectedCustomer.gender || "N/A"}</p>
+                </div>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500 uppercase font-medium mb-1">Address</p>
+                <p className="text-gray-800">{selectedCustomer.address || "N/A"}</p>
+              </div>
+            </div>
+            <div className="p-6 pt-0">
+              <button
+                onClick={handleCloseModal}
+                className="w-full px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Edit Modal */}
       {isEditModalOpen && (
@@ -270,6 +375,11 @@ const CustomersPage = () => {
 
             {/* Modal Body */}
             <form onSubmit={handleSubmit} className="p-6">
+              {saveError && (
+                <div className="mb-6 bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3">
+                  {saveError}
+                </div>
+              )}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* First Name */}
                 <div>
@@ -372,21 +482,36 @@ const CustomersPage = () => {
                 <button
                   type="button"
                   onClick={handleCloseModal}
-                  className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
+                  disabled={saving}
+                  className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium disabled:opacity-50"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-6 py-2 bg-black text-white rounded-lg hover:bg-gray-800 transition-colors font-medium"
+                  disabled={saving}
+                  className="px-6 py-2 bg-black text-white rounded-lg hover:bg-gray-800 transition-colors font-medium disabled:opacity-50"
                 >
-                  Update Customer
+                  {saving ? "Saving..." : "Update Customer"}
                 </button>
               </div>
             </form>
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title="Delete this customer?"
+        message={
+          deleteTarget
+            ? `${getFullName(deleteTarget)}'s account will be permanently deleted.${deleteError ? ` ${deleteError}` : ""}`
+            : ""
+        }
+        loading={deleting}
+        onConfirm={handleDelete}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </>
   );
 };

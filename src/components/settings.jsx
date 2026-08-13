@@ -1,55 +1,104 @@
-import { User, Bell, Lock, CreditCard, Globe, Moon, Save } from 'lucide-react';
-import { useState } from 'react';
+import { User, Lock, Save, CheckCircle2 } from "lucide-react";
+import { useState } from "react";
+import { useDispatch, useSelector } from "react-redux";
+import { setUser } from "../store/userSlice";
+import api from "../api/axios";
 
 const SettingsPage = () => {
-  const [formData, setFormData] = useState({
-    firstName: 'John',
-    lastName: 'Doe',
-    email: 'john.doe@example.com',
-    phone: '+91 98765 43210',
-    company: 'Tech Solutions Inc.',
-    notifications: {
-      email: true,
-      push: false,
-      sms: true
-    },
-    language: 'en',
-    timezone: 'Asia/Kolkata',
-    darkMode: false
+  const user = useSelector((state) => state.user.user);
+  const dispatch = useDispatch();
+
+  const [profileForm, setProfileForm] = useState({
+    name: user?.name || "",
+    lastName: user?.lastName || "",
+    mobile: user?.mobile || "",
+    address: user?.address || "",
   });
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileError, setProfileError] = useState("");
+  const [profileSuccess, setProfileSuccess] = useState(false);
 
-  const handleInputChange = (e) => {
+  const [passwordForm, setPasswordForm] = useState({
+    currentPassword: "",
+    newPassword: "",
+    confirmPassword: "",
+  });
+  const [passwordSaving, setPasswordSaving] = useState(false);
+  const [passwordError, setPasswordError] = useState("");
+  const [passwordSuccess, setPasswordSuccess] = useState(false);
+
+  const handleProfileChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
+    setProfileForm((prev) => ({ ...prev, [name]: value }));
+    setProfileSuccess(false);
   };
 
-  const handleNotificationChange = (type) => {
-    setFormData(prev => ({
-      ...prev,
-      notifications: {
-        ...prev.notifications,
-        [type]: !prev.notifications[type]
-      }
-    }));
+  const handlePasswordChange = (e) => {
+    const { name, value } = e.target;
+    setPasswordForm((prev) => ({ ...prev, [name]: value }));
+    setPasswordSuccess(false);
   };
 
-  const handleSave = () => {
-    alert('Settings saved successfully!');
+  const handleProfileSubmit = async (e) => {
+    e.preventDefault();
+    setProfileError("");
+    setProfileSuccess(false);
+    try {
+      setProfileSaving(true);
+      const res = await api.put("/update-user", {
+        id: user._id,
+        email: user.email,
+        role: user.role,
+        ...profileForm,
+      });
+      dispatch(setUser({ user: { ...user, ...res.data.user } }));
+      setProfileSuccess(true);
+    } catch (error) {
+      setProfileError(
+        error.response?.data?.error || "Failed to update profile",
+      );
+    } finally {
+      setProfileSaving(false);
+    }
+  };
+
+  const handlePasswordSubmit = async (e) => {
+    e.preventDefault();
+    setPasswordError("");
+    setPasswordSuccess(false);
+
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+      setPasswordError("New password and confirmation don't match");
+      return;
+    }
+
+    try {
+      setPasswordSaving(true);
+      await api.put("/change-password", {
+        currentPassword: passwordForm.currentPassword,
+        newPassword: passwordForm.newPassword,
+      });
+      setPasswordSuccess(true);
+      setPasswordForm({ currentPassword: "", newPassword: "", confirmPassword: "" });
+    } catch (error) {
+      setPasswordError(
+        error.response?.data?.error || "Failed to change password",
+      );
+    } finally {
+      setPasswordSaving(false);
+    }
   };
 
   return (
     <>
       <div className="mb-8">
         <h2 className="text-3xl font-bold text-gray-800">Settings</h2>
-        <p className="text-gray-500 mt-1">Manage your account settings and preferences</p>
+        <p className="text-gray-500 mt-1">Manage your admin profile and security</p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Profile Settings */}
-        <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-gray-100">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100">
           <div className="p-6 border-b border-gray-100">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center">
@@ -58,15 +107,27 @@ const SettingsPage = () => {
               <h3 className="text-lg font-bold text-gray-800">Profile Information</h3>
             </div>
           </div>
-          <div className="p-6 space-y-4">
+          <form onSubmit={handleProfileSubmit} className="p-6 space-y-4">
+            {profileError && (
+              <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3">
+                {profileError}
+              </div>
+            )}
+            {profileSuccess && (
+              <div className="flex items-center gap-2 bg-green-50 border border-green-200 text-green-700 text-sm rounded-lg px-4 py-3">
+                <CheckCircle2 className="w-4 h-4" />
+                Profile updated
+              </div>
+            )}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">First Name</label>
                 <input
                   type="text"
-                  name="firstName"
-                  value={formData.firstName}
-                  onChange={handleInputChange}
+                  name="name"
+                  value={profileForm.name}
+                  onChange={handleProfileChange}
+                  required
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
@@ -75,8 +136,8 @@ const SettingsPage = () => {
                 <input
                   type="text"
                   name="lastName"
-                  value={formData.lastName}
-                  onChange={handleInputChange}
+                  value={profileForm.lastName}
+                  onChange={handleProfileChange}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
               </div>
@@ -85,197 +146,110 @@ const SettingsPage = () => {
               <label className="block text-sm font-medium text-gray-700 mb-2">Email Address</label>
               <input
                 type="email"
-                name="email"
-                value={formData.email}
-                onChange={handleInputChange}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                value={user?.email || ""}
+                disabled
+                className="w-full px-4 py-2 border border-gray-200 bg-gray-50 text-gray-500 rounded-lg"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Phone Number</label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Mobile Number</label>
               <input
                 type="tel"
-                name="phone"
-                value={formData.phone}
-                onChange={handleInputChange}
+                name="mobile"
+                value={profileForm.mobile}
+                onChange={handleProfileChange}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Company</label>
-              <input
-                type="text"
-                name="company"
-                value={formData.company}
-                onChange={handleInputChange}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              <label className="block text-sm font-medium text-gray-700 mb-2">Address</label>
+              <textarea
+                name="address"
+                value={profileForm.address}
+                onChange={handleProfileChange}
+                rows="3"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
               />
             </div>
-          </div>
+            <button
+              type="submit"
+              disabled={profileSaving}
+              className="px-6 py-2.5 bg-black text-white rounded-lg hover:bg-gray-800 transition-colors font-medium flex items-center gap-2 disabled:opacity-50"
+            >
+              <Save className="w-4 h-4" />
+              {profileSaving ? "Saving..." : "Save Changes"}
+            </button>
+          </form>
         </div>
 
-        {/* Quick Actions */}
-        <div className="space-y-6">
-          {/* Security */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100">
-            <div className="p-6 border-b border-gray-100">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-purple-500 rounded-lg flex items-center justify-center">
-                  <Lock className="w-5 h-5 text-white" />
-                </div>
-                <h3 className="text-lg font-bold text-gray-800">Security</h3>
+        {/* Security */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100">
+          <div className="p-6 border-b border-gray-100">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-purple-500 rounded-lg flex items-center justify-center">
+                <Lock className="w-5 h-5 text-white" />
               </div>
-            </div>
-            <div className="p-6 space-y-3">
-              <button className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition-colors">
-                Change Password
-              </button>
-              <button className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition-colors">
-                Two-Factor Authentication
-              </button>
-              <button className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition-colors">
-                Active Sessions
-              </button>
+              <h3 className="text-lg font-bold text-gray-800">Change Password</h3>
             </div>
           </div>
-
-          {/* Billing */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100">
-            <div className="p-6 border-b border-gray-100">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-green-500 rounded-lg flex items-center justify-center">
-                  <CreditCard className="w-5 h-5 text-white" />
-                </div>
-                <h3 className="text-lg font-bold text-gray-800">Billing</h3>
+          <form onSubmit={handlePasswordSubmit} className="p-6 space-y-4">
+            {passwordError && (
+              <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3">
+                {passwordError}
               </div>
-            </div>
-            <div className="p-6 space-y-3">
-              <button className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition-colors">
-                Payment Methods
-              </button>
-              <button className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition-colors">
-                Billing History
-              </button>
-              <button className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 rounded-lg transition-colors">
-                Invoices
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Notifications */}
-      <div className="mt-6 bg-white rounded-xl shadow-sm border border-gray-100">
-        <div className="p-6 border-b border-gray-100">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-orange-500 rounded-lg flex items-center justify-center">
-              <Bell className="w-5 h-5 text-white" />
-            </div>
-            <h3 className="text-lg font-bold text-gray-800">Notification Preferences</h3>
-          </div>
-        </div>
-        <div className="p-6 space-y-4">
-          <div className="flex items-center justify-between">
+            )}
+            {passwordSuccess && (
+              <div className="flex items-center gap-2 bg-green-50 border border-green-200 text-green-700 text-sm rounded-lg px-4 py-3">
+                <CheckCircle2 className="w-4 h-4" />
+                Password changed successfully
+              </div>
+            )}
             <div>
-              <h4 className="text-sm font-semibold text-gray-800">Email Notifications</h4>
-              <p className="text-xs text-gray-500 mt-1">Receive updates via email</p>
-            </div>
-            <label className="relative inline-flex items-center cursor-pointer">
+              <label className="block text-sm font-medium text-gray-700 mb-2">Current Password</label>
               <input
-                type="checkbox"
-                checked={formData.notifications.email}
-                onChange={() => handleNotificationChange('email')}
-                className="sr-only peer"
-              />
-              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-            </label>
-          </div>
-          <div className="flex items-center justify-between">
-            <div>
-              <h4 className="text-sm font-semibold text-gray-800">Push Notifications</h4>
-              <p className="text-xs text-gray-500 mt-1">Receive push notifications on your device</p>
-            </div>
-            <label className="relative inline-flex items-center cursor-pointer">
-              <input
-                type="checkbox"
-                checked={formData.notifications.push}
-                onChange={() => handleNotificationChange('push')}
-                className="sr-only peer"
-              />
-              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-            </label>
-          </div>
-          <div className="flex items-center justify-between">
-            <div>
-              <h4 className="text-sm font-semibold text-gray-800">SMS Notifications</h4>
-              <p className="text-xs text-gray-500 mt-1">Receive text message alerts</p>
-            </div>
-            <label className="relative inline-flex items-center cursor-pointer">
-              <input
-                type="checkbox"
-                checked={formData.notifications.sms}
-                onChange={() => handleNotificationChange('sms')}
-                className="sr-only peer"
-              />
-              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-            </label>
-          </div>
-        </div>
-      </div>
-
-      {/* Preferences */}
-      <div className="mt-6 bg-white rounded-xl shadow-sm border border-gray-100">
-        <div className="p-6 border-b border-gray-100">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-indigo-500 rounded-lg flex items-center justify-center">
-              <Globe className="w-5 h-5 text-white" />
-            </div>
-            <h3 className="text-lg font-bold text-gray-800">Preferences</h3>
-          </div>
-        </div>
-        <div className="p-6 space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Language</label>
-              <select
-                name="language"
-                value={formData.language}
-                onChange={handleInputChange}
+                type="password"
+                name="currentPassword"
+                value={passwordForm.currentPassword}
+                onChange={handlePasswordChange}
+                required
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <option value="en">English</option>
-                <option value="hi">Hindi</option>
-                <option value="es">Spanish</option>
-                <option value="fr">French</option>
-              </select>
+              />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Timezone</label>
-              <select
-                name="timezone"
-                value={formData.timezone}
-                onChange={handleInputChange}
+              <label className="block text-sm font-medium text-gray-700 mb-2">New Password</label>
+              <input
+                type="password"
+                name="newPassword"
+                value={passwordForm.newPassword}
+                onChange={handlePasswordChange}
+                required
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              >
-                <option value="Asia/Kolkata">India (IST)</option>
-                <option value="America/New_York">New York (EST)</option>
-                <option value="Europe/London">London (GMT)</option>
-                <option value="Asia/Tokyo">Tokyo (JST)</option>
-              </select>
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Must be strong: mix of upper/lowercase, numbers & symbols.
+              </p>
             </div>
-          </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Confirm New Password</label>
+              <input
+                type="password"
+                name="confirmPassword"
+                value={passwordForm.confirmPassword}
+                onChange={handlePasswordChange}
+                required
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={passwordSaving}
+              className="px-6 py-2.5 bg-black text-white rounded-lg hover:bg-gray-800 transition-colors font-medium flex items-center gap-2 disabled:opacity-50"
+            >
+              <Lock className="w-4 h-4" />
+              {passwordSaving ? "Updating..." : "Update Password"}
+            </button>
+          </form>
         </div>
-      </div>
-
-      {/* Save Button */}
-      <div className="mt-6 flex justify-end">
-        <button
-          onClick={handleSave}
-          className="px-6 py-3 bg-black text-white rounded-lg hover:bg-gray-800 transition-colors font-medium flex items-center gap-2"
-        >
-          <Save className="w-5 h-5" />
-          Save Changes
-        </button>
       </div>
     </>
   );

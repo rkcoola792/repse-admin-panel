@@ -1,37 +1,30 @@
-import axios from "axios";
-import { Eye, Edit, Trash2, X } from "lucide-react";
-import { useState, useEffect } from "react";
+import { Eye, Edit, X, Package } from "lucide-react";
+import { useState, useEffect, useMemo } from "react";
+import api from "../api/axios";
 
-const OrdersPage = () => {
+const DELIVERY_STATUS_OPTIONS = ["processing", "intransit", "delivered", "cancelled"];
+
+const OrdersPage = ({ searchQuery = "" }) => {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [statusFilter, setStatusFilter] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [newDeliveryStatus, setNewDeliveryStatus] = useState("");
   const [updateLoading, setUpdateLoading] = useState(false);
-
-  const deliveryStatusOptions = [
-    "pending",
-    "shipped",
-    "delivered",
-    "cancelled",
-  ];
+  const [updateError, setUpdateError] = useState("");
 
   const getOrders = async () => {
     try {
       setLoading(true);
       setError(null);
-      const response = await axios.get(
-        import.meta.env.VITE_APP_BASE_URL + "/get-orders",
-        { withCredentials: true },
-      );
-      const data = response.data;
-      setOrders(data);
+      const response = await api.get("/get-orders");
+      setOrders(response.data);
     } catch (error) {
       console.error("Error fetching orders:", error);
-      setError(error.message);
+      setError(error.response?.data?.error || error.message);
     } finally {
       setLoading(false);
     }
@@ -40,7 +33,8 @@ const OrdersPage = () => {
   const handleEditClick = (order, e) => {
     e.stopPropagation();
     setSelectedOrder(order);
-    setNewDeliveryStatus(order.deliveryStatus || "pending");
+    setNewDeliveryStatus(order.deliveryStatus || "processing");
+    setUpdateError("");
     setIsModalOpen(true);
   };
 
@@ -71,12 +65,12 @@ const OrdersPage = () => {
 
     try {
       setUpdateLoading(true);
+      setUpdateError("");
       const orderId = selectedOrder._id?.$oid || selectedOrder._id;
-      await axios.put(
-        `${import.meta.env.VITE_APP_BASE_URL}/update-delivery-status`,
-        { deliveryStatus: newDeliveryStatus, orderId: orderId },
-        { withCredentials: true },
-      );
+      await api.put("/update-delivery-status", {
+        deliveryStatus: newDeliveryStatus,
+        orderId: orderId,
+      });
 
       setOrders(
         orders.map((order) => {
@@ -91,6 +85,9 @@ const OrdersPage = () => {
       handleCloseModal();
     } catch (error) {
       console.error("Error updating delivery status:", error);
+      setUpdateError(
+        error.response?.data?.error || "Failed to update delivery status",
+      );
     } finally {
       setUpdateLoading(false);
     }
@@ -108,9 +105,9 @@ const OrdersPage = () => {
     switch (deliveryStatus?.toLowerCase()) {
       case "delivered":
         return "bg-green-100 text-green-800";
-      case "shipped":
+      case "intransit":
         return "bg-blue-100 text-blue-800";
-      case "pending":
+      case "processing":
         return "bg-yellow-100 text-yellow-800";
       case "cancelled":
         return "bg-red-100 text-red-800";
@@ -132,10 +129,9 @@ const OrdersPage = () => {
   };
 
   const formatStatus = (deliveryStatus) => {
-    return (
-      deliveryStatus?.charAt(0).toUpperCase() + deliveryStatus?.slice(1) ||
-      "Unknown"
-    );
+    if (!deliveryStatus) return "Processing";
+    if (deliveryStatus === "intransit") return "In Transit";
+    return deliveryStatus.charAt(0).toUpperCase() + deliveryStatus.slice(1);
   };
 
   const getProductNames = (items) => {
@@ -145,12 +141,28 @@ const OrdersPage = () => {
   };
 
   const calculateItemTotal = (item) => {
-    return (item.amount * item.quantity).toFixed(2);
+    return ((item.price || 0) * (item.quantity || 0)).toFixed(2);
   };
+
+  const filteredOrders = useMemo(() => {
+    return orders.filter((order) => {
+      if (statusFilter && (order.deliveryStatus || "processing") !== statusFilter) {
+        return false;
+      }
+      if (!searchQuery) return true;
+      const q = searchQuery.toLowerCase();
+      return (
+        (order.orderId || "").toLowerCase().includes(q) ||
+        (order.receipt || "").toLowerCase().includes(q) ||
+        (order.notes?.first_name || "").toLowerCase().includes(q) ||
+        (order.notes?.email || "").toLowerCase().includes(q)
+      );
+    });
+  }, [orders, statusFilter, searchQuery]);
 
   if (loading && orders.length === 0) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
+      <div className="flex items-center justify-center py-24">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900 mx-auto"></div>
           <p className="mt-4 text-gray-600">Loading orders...</p>
@@ -161,7 +173,7 @@ const OrdersPage = () => {
 
   if (error && orders.length === 0) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
+      <div className="flex items-center justify-center py-24">
         <div className="text-center">
           <p className="text-red-600 mb-4">Error: {error}</p>
           <button
@@ -178,20 +190,34 @@ const OrdersPage = () => {
   return (
     <>
       <div className="mb-8">
-        <div className="flex justify-between items-center">
+        <div className="flex justify-between items-center flex-wrap gap-4">
           <div>
             <h2 className="text-3xl font-bold text-gray-800">Orders</h2>
             <p className="text-gray-500 mt-1">
               Manage and track all customer orders
             </p>
           </div>
-          <button
-            onClick={getOrders}
-            disabled={loading}
-            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {loading ? "Refreshing..." : "Refresh"}
-          </button>
+          <div className="flex items-center gap-3">
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-black focus:border-transparent"
+            >
+              <option value="">All statuses</option>
+              {DELIVERY_STATUS_OPTIONS.map((status) => (
+                <option key={status} value={status}>
+                  {formatStatus(status)}
+                </option>
+              ))}
+            </select>
+            <button
+              onClick={getOrders}
+              disabled={loading}
+              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {loading ? "Refreshing..." : "Refresh"}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -224,7 +250,7 @@ const OrdersPage = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {orders.length === 0 ? (
+              {filteredOrders.length === 0 ? (
                 <tr>
                   <td
                     colSpan="7"
@@ -234,7 +260,7 @@ const OrdersPage = () => {
                   </td>
                 </tr>
               ) : (
-                orders.map((order) => (
+                filteredOrders.map((order) => (
                   <tr
                     key={order._id?.$oid || order._id}
                     onClick={() => handleRowClick(order)}
@@ -281,16 +307,9 @@ const OrdersPage = () => {
                         <button
                           onClick={(e) => handleEditClick(order, e)}
                           className="p-1 hover:bg-gray-100 rounded"
-                          title="Edit"
+                          title="Update status"
                         >
                           <Edit className="w-4 h-4 text-gray-600" />
-                        </button>
-                        <button
-                          onClick={(e) => e.stopPropagation()}
-                          className="p-1 hover:bg-gray-100 rounded"
-                          title="Delete"
-                        >
-                          <Trash2 className="w-4 h-4 text-red-600" />
                         </button>
                       </div>
                     </td>
@@ -435,7 +454,25 @@ const OrdersPage = () => {
                       key={index}
                       className="bg-gray-50 p-4 rounded-lg hover:bg-gray-100 transition-colors"
                     >
-                      <div className="flex justify-between items-start">
+                      <div className="flex justify-between items-start gap-4">
+                        <div className="w-16 h-20 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0">
+                          {item.image ? (
+                            <img
+                              src={item.image}
+                              alt={item.name}
+                              className="w-full h-full object-cover"
+                              onError={(e) => {
+                                e.target.onerror = null;
+                                e.target.src =
+                                  'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="gray"%3E%3Crect width="24" height="24"/%3E%3C/svg%3E';
+                              }}
+                            />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center">
+                              <Package className="w-6 h-6 text-gray-400" />
+                            </div>
+                          )}
+                        </div>
                         <div className="flex-1">
                           <p className="font-semibold text-gray-800 text-lg mb-2">
                             {item.name}
@@ -462,15 +499,7 @@ const OrdersPage = () => {
                                 Unit Price:
                               </span>
                               <span className="text-sm font-medium text-gray-700">
-                                ₹{item.amount/100}
-                              </span>
-                            </div>
-                            <div className="flex items-center">
-                              <span className="text-xs text-gray-500 uppercase font-medium mr-2">
-                                Currency:
-                              </span>
-                              <span className="text-sm font-medium text-gray-700">
-                                {item.currency}
+                                ₹{item.price}
                               </span>
                             </div>
                           </div>
@@ -480,7 +509,7 @@ const OrdersPage = () => {
                             Subtotal
                           </p>
                           <p className="font-bold text-gray-800 text-xl">
-                            ₹{calculateItemTotal(item)/100}
+                            ₹{calculateItemTotal(item)}
                           </p>
                         </div>
                       </div>
@@ -501,8 +530,9 @@ const OrdersPage = () => {
                   onClick={() => {
                     handleCloseDetailsModal();
                     setNewDeliveryStatus(
-                      selectedOrder.deliveryStatus || "pending",
+                      selectedOrder.deliveryStatus || "processing",
                     );
+                    setUpdateError("");
                     setIsModalOpen(true);
                   }}
                   className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors font-medium"
@@ -546,6 +576,12 @@ const OrdersPage = () => {
               </p>
             </div>
 
+            {updateError && (
+              <div className="mb-4 bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3">
+                {updateError}
+              </div>
+            )}
+
             <div className="mb-6">
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Delivery Status
@@ -555,7 +591,7 @@ const OrdersPage = () => {
                 onChange={(e) => setNewDeliveryStatus(e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
-                {deliveryStatusOptions.map((status) => (
+                {DELIVERY_STATUS_OPTIONS.map((status) => (
                   <option key={status} value={status}>
                     {formatStatus(status)}
                   </option>
