@@ -528,7 +528,7 @@ const OrdersPage = ({ searchQuery = "" }) => {
                 </button>
                 <button
                   onClick={() => {
-                    handleCloseDetailsModal();
+                    setIsDetailsModalOpen(false);
                     setNewDeliveryStatus(
                       selectedOrder.deliveryStatus || "processing",
                     );
