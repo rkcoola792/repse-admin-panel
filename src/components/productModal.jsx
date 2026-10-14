@@ -6,8 +6,6 @@ const MAX_IMAGE_MB = 5;
 
 const SIZES = ["S", "M", "L"];
 
-const emptyVariants = () => SIZES.map((size) => ({ size, stock: 0 }));
-
 const toFormState = (product) => ({
   name: product?.name || "",
   price: product?.price ?? "",

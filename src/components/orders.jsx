@@ -2,7 +2,7 @@ import { Eye, Edit, X, Package } from "lucide-react";
 import { useState, useEffect, useMemo } from "react";
 import api from "../api/axios";
 
-const DELIVERY_STATUS_OPTIONS = ["processing", "intransit", "delivered", "cancelled"];
+const DELIVERY_STATUS_OPTIONS = ["processing", "intransit", "delivered", "cancelled", "stock_issue"];
 
 const OrdersPage = ({ searchQuery = "" }) => {
   const [orders, setOrders] = useState([]);
@@ -111,6 +111,8 @@ const OrdersPage = ({ searchQuery = "" }) => {
         return "bg-yellow-100 text-yellow-800";
       case "cancelled":
         return "bg-red-100 text-red-800";
+      case "stock_issue":
+        return "bg-orange-100 text-orange-800";
       default:
         return "bg-gray-100 text-gray-800";
     }
@@ -131,6 +133,7 @@ const OrdersPage = ({ searchQuery = "" }) => {
   const formatStatus = (deliveryStatus) => {
     if (!deliveryStatus) return "Processing";
     if (deliveryStatus === "intransit") return "In Transit";
+    if (deliveryStatus === "stock_issue") return "Stock Issue — Review";
     return deliveryStatus.charAt(0).toUpperCase() + deliveryStatus.slice(1);
   };
 

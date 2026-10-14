@@ -27,7 +27,7 @@ function App() {
           setAuthMessage("This account doesn't have admin access.");
           dispatch(logout());
         }
-      } catch (error) {
+      } catch {
         if (cancelled) return;
         setAuthMessage("Your session has expired. Please sign in again.");
         dispatch(logout());
